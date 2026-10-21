@@ -1,0 +1,6 @@
+# When the app sits behind a load balancer / CDN, list its address so the real client IP is used
+# (rate limiters rely on it). With nginx as the edge, REMOTE_ADDR is already the client: leave empty.
+when@prod:
+    framework:
+        trusted_proxies: '%env(default::TRUSTED_PROXIES)%'
+        trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port']

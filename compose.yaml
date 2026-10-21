@@ -1,0 +1,83 @@
+name: rasoherina
+
+x-app: &app
+  build:
+    context: .
+    target: dev
+  volumes:
+    - .:/var/www/app
+    - uploads:/var/www/app/public/uploads
+  environment: &app-env
+    APP_ENV: dev
+    DATABASE_URL: postgresql://app:app@database:5432/app?serverVersion=16&charset=utf8
+    REDIS_URL: redis://redis:6379
+    MESSENGER_TRANSPORT_DSN: redis://redis:6379/messages
+    UPLOADS_BASE_URL: http://localhost:8080/uploads
+    MERCURE_URL: http://mercure/.well-known/mercure
+    MERCURE_PUBLIC_URL: http://localhost:8081/.well-known/mercure
+    MERCURE_JWT_SECRET: "!ChangeThisMercureHubJWTSecretKey!"
+    JWT_PASSPHRASE: change-me
+  depends_on:
+    database:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/app/public:ro
+      - uploads:/var/www/app/public/uploads:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
+  app:
+    <<: *app
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "1"
+
+  worker:
+    <<: *app
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=128M", "-vv"]
+    restart: unless-stopped
+
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+  mercure:
+    image: dunglas/mercure
+    environment:
+      SERVER_NAME: ":80"
+      MERCURE_PUBLISHER_JWT_KEY: "!ChangeThisMercureHubJWTSecretKey!"
+      MERCURE_SUBSCRIBER_JWT_KEY: "!ChangeThisMercureHubJWTSecretKey!"
+      MERCURE_EXTRA_DIRECTIVES: |
+        cors_origins *
+        anonymous
+    ports:
+      - "8081:80"
+
+volumes:
+  uploads:
+  db_data:
+  redis_data:

@@ -1,0 +1,24 @@
+# Swap the adapter (e.g. "aws" with league/flysystem-aws-s3-v3) to move uploads to S3 / object storage.
+flysystem:
+    storages:
+        uploads.storage:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/public/uploads'
+                permissions:
+                    file:
+                        public: 0644
+                        private: 0600
+                    dir:
+                        public: 0755
+                        private: 0700
+            visibility: public
+            directory_visibility: public
+
+when@test:
+    flysystem:
+        storages:
+            uploads.storage:
+                adapter: 'local'
+                options:
+                    directory: '%kernel.project_dir%/var/uploads_test'

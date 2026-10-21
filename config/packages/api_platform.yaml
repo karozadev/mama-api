@@ -1,0 +1,23 @@
+api_platform:
+    title: "Qu'est-ce qu'on mange aujourd'hui ?"
+    description: "API du réseau social culinaire malgache : le met du jour partagé par les mamans."
+    version: 1.0.0
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json']
+    enable_docs: '%env(bool:API_DOCS_ENABLED)%'
+    enable_swagger_ui: '%env(bool:API_DOCS_ENABLED)%'
+    enable_re_doc: '%env(bool:API_DOCS_ENABLED)%'
+    docs_formats:
+        jsonld: ['application/ld+json']
+        jsonopenapi: ['application/vnd.openapi+json']
+        html: ['text/html']
+    defaults:
+        stateless: true
+        pagination_items_per_page: 20
+        pagination_maximum_items_per_page: 30
+        pagination_client_items_per_page: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+    mercure:
+        hub_url: '%env(MERCURE_PUBLIC_URL)%'
