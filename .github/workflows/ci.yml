@@ -38,6 +38,13 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mercure:
+        image: dunglas/mercure
+        env:
+          SERVER_NAME: ':80'
+          MERCURE_PUBLISHER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+          MERCURE_SUBSCRIBER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+        ports: ['8081:80']
     env:
       APP_ENV: test
       DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app?serverVersion=16&charset=utf8
@@ -72,6 +79,15 @@ jobs:
         run: |
           php bin/console doctrine:database:create --if-not-exists --no-interaction
           php bin/console doctrine:schema:create --no-interaction
+
+      - name: Wait for Mercure hub
+        run: |
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://localhost:8081/healthz && exit 0
+            sleep 2
+          done
+          echo "Mercure hub did not start" >&2
+          exit 1
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit
