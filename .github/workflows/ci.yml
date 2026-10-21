@@ -39,7 +39,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mercure:
-        image: dunglas/mercure
+        image: dunglas/mercure:v0.24.2
         env:
           SERVER_NAME: ':80'
           MERCURE_PUBLISHER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
@@ -83,7 +83,7 @@ jobs:
       - name: Wait for Mercure hub
         run: |
           for i in $(seq 1 30); do
-            curl -s -o /dev/null http://localhost:8081/healthz && exit 0
+            curl -s -o /dev/null http://localhost:8081/.well-known/mercure && exit 0
             sleep 2
           done
           echo "Mercure hub did not start" >&2
