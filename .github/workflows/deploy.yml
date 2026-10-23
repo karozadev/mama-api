@@ -1,0 +1,139 @@
+name: Deploy
+
+# Builds the production images, pushes them to GHCR, then has the VPS pull and start them.
+# Runs after the CI workflow succeeded on main. Run it by hand with a tag to roll back to a built version.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag (git sha) to deploy without rebuilding, e.g. to roll back. Empty = build HEAD of the selected ref.
+        required: false
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  APP_IMAGE: ghcr.io/karozadev/mama-api
+  NGINX_IMAGE: ghcr.io/karozadev/mama-api-nginx
+  DEPLOY_DIR: /opt/mama
+
+jobs:
+  build:
+    name: Build & push images
+    if: github.event_name == 'workflow_dispatch' && inputs.tag == '' || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+    steps:
+      - id: vars
+        run: echo "tag=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.vars.outputs.tag }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push the PHP-FPM image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: true
+          tags: |
+            ${{ env.APP_IMAGE }}:${{ steps.vars.outputs.tag }}
+            ${{ env.APP_IMAGE }}:latest
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,scope=app,mode=max
+
+      - name: Build & push the nginx image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: nginx-prod
+          push: true
+          tags: |
+            ${{ env.NGINX_IMAGE }}:${{ steps.vars.outputs.tag }}
+            ${{ env.NGINX_IMAGE }}:latest
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,scope=nginx,mode=max
+
+  deploy:
+    name: Deploy to the VPS
+    needs: build
+    # Also run when the build job was skipped (manual run with a tag). Off until the repository variable
+    # DEPLOY_ENABLED is "true" (set it once the VPS_* secrets exist).
+    if: vars.DEPLOY_ENABLED == 'true' && always() && (needs.build.result == 'success' || needs.build.result == 'skipped') && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.build.outputs.tag || inputs.tag }}
+      SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          SSH_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USER }}
+            Port ${SSH_PORT:-22}
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Send the compose file and scripts
+        run: |
+          ssh vps "mkdir -p ${{ env.DEPLOY_DIR }}"
+          tar czf - compose.prod.yaml Makefile .env.prod.example scripts | ssh vps "tar xzf - -C ${{ env.DEPLOY_DIR }}"
+
+      - name: Pull the images and restart the stack
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # The token is only valid for this job; it is piped through stdin, never written on a command line.
+          printf '%s' "$GHCR_TOKEN" | ssh vps "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          ssh vps "cd ${{ env.DEPLOY_DIR }} && IMAGE_TAG='${TAG}' ./scripts/deploy.sh"
+
+      - name: Remove the registry credentials from the server
+        if: always()
+        run: ssh vps "docker logout ghcr.io" || true
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            curl -fsS https://mama.karoza.dev/api/stats >/dev/null && exit 0
+            sleep 5
+          done
+          echo "https://mama.karoza.dev/api/stats did not answer" >&2
+          exit 1

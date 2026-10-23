@@ -1,4 +1,5 @@
-# Production stack. Usage: `make prod-deploy` (see docs/DEPLOY.md).
+# Production stack. Deployed by .github/workflows/deploy.yml, which pulls the images built by CI
+# (IMAGE_TAG in .env.prod). `make prod-deploy` still builds them locally (see docs/DEPLOY.md).
 # Every secret comes from .env.prod; the app refuses to boot on development defaults.
 name: rasoherina-prod
 
@@ -25,7 +26,7 @@ x-app: &app
   build:
     context: .
     target: prod
-  image: rasoherina-app:prod
+  image: ghcr.io/karozadev/mama-api:${IMAGE_TAG:-latest}
   restart: unless-stopped
   logging: *logging
   environment:
@@ -36,7 +37,7 @@ services:
     build:
       context: .
       target: nginx-prod
-    image: rasoherina-nginx:prod
+    image: ghcr.io/karozadev/mama-api-nginx:${IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *logging
     environment:

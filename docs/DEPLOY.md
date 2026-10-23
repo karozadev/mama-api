@@ -13,21 +13,43 @@ PostgreSQL, Redis, Mercure (temps réel), un worker de files de messages. Tout e
 - Un **nom de domaine** dont l'enregistrement DNS (A/AAAA) pointe vers le serveur.
 - Les ports **80 et 443** ouverts (pare-feu : `ufw allow 22,80,443/tcp`). PostgreSQL, Redis et Mercure ne sont **pas** exposés.
 
-## 2. Premier déploiement
+## 2. Déploiement automatique (GitHub Actions)
+
+Le dépôt n'est **pas cloné** sur le serveur. À chaque push sur `main` dont la CI est verte, le workflow
+`.github/workflows/deploy.yml` :
+
+1. construit les images `ghcr.io/karozadev/mama-api` (PHP-FPM) et `ghcr.io/karozadev/mama-api-nginx`, étiquetées avec le SHA du commit et `latest` ;
+2. envoie sur le serveur (dans `/opt/mama`) uniquement `compose.prod.yaml`, le `Makefile` et `scripts/` ;
+3. se connecte en SSH, tire les images, applique les migrations, redémarre la pile (`scripts/deploy.sh`) et revient au tag précédent si elle ne devient pas saine ;
+4. teste `https://mama.karoza.dev/api/stats`.
+
+### Secrets à créer dans GitHub (Settings → Environments → `production`)
+
+| Secret | Contenu |
+|---|---|
+| `VPS_HOST` | adresse IP ou nom du serveur |
+| `VPS_USER` | utilisateur SSH (membre du groupe `docker`) |
+| `VPS_SSH_KEY` | clé privée SSH **dédiée au déploiement** (jamais votre clé personnelle) |
+| `VPS_KNOWN_HOSTS` | sortie de `ssh-keyscan -t ed25519 <serveur>`, à comparer avec l'empreinte donnée par l'hébergeur |
+| `VPS_PORT` | optionnel, 22 par défaut |
+
+Les images GHCR restent privées : le serveur s'y connecte pendant le déploiement avec le jeton temporaire du workflow, rien n'est stocké.
+
+### Première installation du serveur
 
 ```bash
-git clone <votre-depot> mama && cd mama
+cd /opt/mama                  # créé par un premier lancement du workflow (il s'arrête sur « No .env.prod »)
 make secrets                 # crée .env.prod avec des secrets aléatoires (mode 600)
 nano .env.prod               # renseignez DOMAIN, LETSENCRYPT_EMAIL, CORS_ALLOW_ORIGIN
 make cert                    # certificat Let's Encrypt (le port 80 doit être libre)
-make prod-check              # valide la configuration : refuse les secrets faibles ou de dev
-make prod-deploy             # build, migrations, démarrage
 ```
 
-Vérifiez : `curl https://VOTRE_DOMAINE/api/stats` doit répondre en JSON.
+Relancez ensuite le workflow (Actions → Deploy → Run workflow). Vérifiez : `curl https://VOTRE_DOMAINE/api/stats` doit répondre en JSON.
 
 **Gardez une copie de `.env.prod` dans un gestionnaire de mots de passe.** Perdre `JWT_PASSPHRASE` ou le volume `jwt`
 déconnecte tous les utilisateurs ; perdre `DB_PASSWORD` verrouille la base.
+
+Sans CI, `make prod-check` puis `make prod-deploy` construisent et lancent les images localement (il faut alors le dépôt sur le serveur).
 
 ### Créer le premier compte modérateur
 
@@ -52,21 +74,12 @@ puis ajoutez au `crontab` du serveur :
 
 ## 4. Mises à jour et retour arrière
 
-```bash
-git pull
-make prod-deploy             # build + migrations + redémarrage (les images actuelles sont gardées en :previous)
-```
+Les mises à jour partent toutes seules à chaque push sur `main` (voir §2). Les migrations s'exécutent **avant** le redémarrage :
+faites une sauvegarde avant toute migration importante (`make backup`).
 
-Les migrations s'exécutent **avant** le redémarrage. Faites une sauvegarde avant toute migration importante (`make backup`).
-
-Retour arrière du code (si la migration est compatible) :
-
-```bash
-docker tag rasoherina-app:previous rasoherina-app:prod && docker tag rasoherina-nginx:previous rasoherina-nginx:prod
-make prod-up
-```
-
-Si la nouvelle version a modifié le schéma de façon incompatible, restaurez aussi la base (voir §5).
+Retour arrière du code : Actions → Deploy → Run workflow, avec `tag` = le SHA d'une version déjà construite (les images ne sont pas reconstruites).
+Si le redémarrage échoue, `scripts/deploy.sh` revient seul au tag précédent. Si la nouvelle version a modifié le schéma de façon
+incompatible, restaurez aussi la base (voir §5) : les migrations ne sont jamais annulées automatiquement.
 
 ## 5. Sauvegardes
 

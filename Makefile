@@ -77,9 +77,7 @@ PROD := docker compose -f compose.prod.yaml --env-file .env.prod
 secrets: ## Create .env.prod with fresh random secrets (never overwrites an existing file)
 	@./scripts/make-env-prod.sh
 
-prod-build: ## Build the production images (the current ones are kept as :previous for a rollback)
-	-@docker tag rasoherina-app:prod rasoherina-app:previous 2>/dev/null
-	-@docker tag rasoherina-nginx:prod rasoherina-nginx:previous 2>/dev/null
+prod-build: ## Build the production images locally (CI normally builds and pushes them to GHCR)
 	$(PROD) build
 
 prod-check: ## Validate .env.prod and the compose file
