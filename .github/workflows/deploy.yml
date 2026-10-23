@@ -80,7 +80,6 @@ jobs:
     # DEPLOY_ENABLED is "true" (set it once the VPS_* secrets exist).
     if: vars.DEPLOY_ENABLED == 'true' && always() && (needs.build.result == 'success' || needs.build.result == 'skipped') && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
     env:

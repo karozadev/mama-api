@@ -23,7 +23,7 @@ Le dépôt n'est **pas cloné** sur le serveur. À chaque push sur `main` dont l
 3. se connecte en SSH, tire les images, applique les migrations, redémarre la pile (`scripts/deploy.sh`) et revient au tag précédent si elle ne devient pas saine ;
 4. teste `https://mama.karoza.dev/api/stats`.
 
-### Secrets à créer dans GitHub (Settings → Environments → `production`)
+### Secrets à créer dans GitHub (Settings → Secrets and variables → Actions, secrets du dépôt)
 
 | Secret | Contenu |
 |---|---|
