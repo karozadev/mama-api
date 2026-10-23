@@ -100,7 +100,12 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            # No pinned key: trust whatever the server presents at this run (see docs/DEPLOY.md).
+            ssh-keyscan -p "${SSH_PORT:-22}" -t ed25519,rsa "${{ secrets.VPS_HOST }}" > ~/.ssh/known_hosts
+          fi
           cat > ~/.ssh/config <<EOF
           Host vps
             HostName ${{ secrets.VPS_HOST }}

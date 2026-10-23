@@ -30,7 +30,7 @@ Le dépôt n'est **pas cloné** sur le serveur. À chaque push sur `main` dont l
 | `VPS_HOST` | adresse IP ou nom du serveur |
 | `VPS_USER` | utilisateur SSH (membre du groupe `docker`) |
 | `VPS_SSH_KEY` | clé privée SSH **dédiée au déploiement** (jamais votre clé personnelle) |
-| `VPS_KNOWN_HOSTS` | sortie de `ssh-keyscan -t ed25519 <serveur>`, à comparer avec l'empreinte donnée par l'hébergeur |
+| `VPS_KNOWN_HOSTS` | optionnel : sortie de `ssh-keyscan -t ed25519 <serveur>`. Sans lui, la clé du serveur est récupérée à chaque déploiement (pratique, mais une attaque de type « homme du milieu » ne serait pas détectée) |
 | `VPS_PORT` | optionnel, 22 par défaut |
 
 Les images GHCR restent privées : le serveur s'y connecte pendant le déploiement avec le jeton temporaire du workflow, rien n'est stocké.
