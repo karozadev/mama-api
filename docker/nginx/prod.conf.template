@@ -1,5 +1,6 @@
-# Production edge: TLS, HTTP->HTTPS, rate limits, security headers, Mercure proxy, static uploads.
-# Rendered by the nginx image from environment variables (${DOMAIN}).
+# Production edge behind a reverse proxy (HTTPS is handled by the proxy): rate limits, security headers,
+# Mercure proxy, static uploads. Rendered by the nginx image from environment variables (${DOMAIN}).
+# The former standalone-TLS configuration is kept in prod-tls.conf.template.
 limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
 limit_req_zone $binary_remote_addr zone=auth:10m rate=10r/m;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
@@ -9,27 +10,11 @@ server {
     server_name ${DOMAIN};
     server_tokens off;
 
-    # Let's Encrypt HTTP-01 challenge
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-
-    location = /healthz { access_log off; return 200 "ok"; }
-
-    location / { return 301 https://$host$request_uri; }
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name ${DOMAIN};
-    server_tokens off;
-
-    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 1d;
-    ssl_session_tickets off;
+    # TLS is terminated by the reverse proxy in front of this container. The port is published on
+    # 127.0.0.1 only (compose.prod.yaml), so the proxy is the only client and its X-Forwarded-* headers can be trusted.
+    set_real_ip_from 0.0.0.0/0;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
 
     root /var/www/app/public;
     client_max_body_size 8m;
@@ -68,7 +53,7 @@ server {
         proxy_set_header Connection "";
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 1h;
@@ -84,6 +69,7 @@ server {
         fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
         fastcgi_param DOCUMENT_ROOT $realpath_root;
         fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTPS on;
     }
 
     location / {
@@ -98,6 +84,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTPS on;
         fastcgi_buffer_size 16k;
         fastcgi_buffers 16 16k;
         fastcgi_read_timeout 30s;

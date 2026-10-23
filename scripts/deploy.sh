@@ -6,27 +6,24 @@ set -eu
 cd "$(dirname "$0")/.."
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 
-# First install: create .env.prod (random secrets, generated here and never printed) and the TLS certificate.
+# First install: create .env.prod (random secrets, generated here and never printed).
 if [ ! -f .env.prod ]; then
     : "${DOMAIN:?DOMAIN is required for the first install}"
-    : "${LETSENCRYPT_EMAIL:?Set the LETSENCRYPT_EMAIL repository variable (Let's Encrypt contact) for the first install}"
     ./scripts/make-env-prod.sh
     domain_re=$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')
-    sed -i -e '/^DOMAIN=/d' -e '/^LETSENCRYPT_EMAIL=/d' -e '/^CORS_ALLOW_ORIGIN=/d' .env.prod
+    sed -i -e '/^DOMAIN=/d' -e '/^CORS_ALLOW_ORIGIN=/d' .env.prod
     {
         printf 'DOMAIN=%s\n' "$DOMAIN"
-        printf 'LETSENCRYPT_EMAIL=%s\n' "$LETSENCRYPT_EMAIL"
         printf 'CORS_ALLOW_ORIGIN=^https://%s$\n' "$domain_re"
     } >> .env.prod
     echo "Created .env.prod on the server: back it up (it holds the secrets, see docs/DEPLOY.md)."
 fi
 
-domain=$(sed -n 's/^DOMAIN=//p' .env.prod | tail -n 1)
-le_dir=$(sed -n 's/^LETSENCRYPT_DIR=//p' .env.prod | tail -n 1)
-if [ ! -d "${le_dir:-/etc/letsencrypt}/live/$domain" ]; then
-    echo "No certificate for $domain yet: requesting one (port 80 must be free)."
-    ./scripts/certbot.sh issue
+# Older .env.prod files (standalone TLS edge) asked for port 80: the stack now sits behind a reverse proxy.
+if [ "$(sed -n 's/^HTTP_PORT=//p' .env.prod | tail -n 1)" = "80" ]; then
+    sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8090/' .env.prod
 fi
+grep -q '^HTTP_PORT=' .env.prod || printf 'HTTP_PORT=8090\n' >> .env.prod
 
 PROD="docker compose -f compose.prod.yaml --env-file .env.prod"
 previous=$(sed -n 's/^IMAGE_TAG=//p' .env.prod | tail -n 1)
@@ -60,4 +57,5 @@ fi
 
 $PROD ps
 docker image prune -f >/dev/null
-echo "Deployed $IMAGE_TAG (previous: ${previous:-none})."
+port=$(sed -n 's/^HTTP_PORT=//p' .env.prod | tail -n 1)
+echo "Deployed $IMAGE_TAG (previous: ${previous:-none}). Serving HTTP on 127.0.0.1:${port:-8090}; point the reverse proxy for the domain there."
