@@ -148,7 +148,7 @@ L'URL de l'API est fixée à la compilation :
 
 ```bash
 cd mobile
-flutter build appbundle --release --dart-define=API_URL=https://VOTRE_DOMAINE      # Google Play
+flutter build appbundle --release --dart-define=API_URL=https://VOTRE_DOMAINE      # Google Play (par défaut en release : https://mama.karoza.dev)
 flutter build ipa --release --dart-define=API_URL=https://VOTRE_DOMAINE            # App Store (sur un Mac)
 ```
 
