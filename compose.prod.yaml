@@ -45,7 +45,7 @@ services:
       NGINX_ENVSUBST_FILTER: ^DOMAIN$$
     # HTTP only, on the loopback: a reverse proxy on the host terminates TLS for the domain and forwards here.
     ports:
-      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8090}:80"
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8023}:80"
     volumes:
       - uploads:/var/www/app/public/uploads:ro
     depends_on:

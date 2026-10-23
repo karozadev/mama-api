@@ -132,7 +132,7 @@ jobs:
         run: |
           # The token is only valid for this job; it is piped through stdin, never written on a command line.
           printf '%s' "$GHCR_TOKEN" | ssh vps "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
-          ssh vps "cd ${{ env.DEPLOY_DIR }} && IMAGE_TAG='${TAG}' DOMAIN='mama.karoza.dev' ./scripts/deploy.sh"
+          ssh vps "cd ${{ env.DEPLOY_DIR }} && IMAGE_TAG='${TAG}' DOMAIN='mama.karoza.dev' HTTP_PORT='${{ vars.HTTP_PORT || 8023 }}' ./scripts/deploy.sh"
 
       - name: Remove the registry credentials from the server
         if: always()
@@ -140,6 +140,6 @@ jobs:
 
       - name: Smoke test (through the published local port; the public HTTPS comes from the reverse proxy)
         run: |
-          ssh vps 'cd ~/mama && port=$(sed -n "s/^HTTP_PORT=//p" .env.prod | tail -n 1); port=${port:-8090}; \
+          ssh vps 'cd ~/mama && port=$(sed -n "s/^HTTP_PORT=//p" .env.prod | tail -n 1); port=${port:-8023}; \
             for i in $(seq 1 12); do curl -fsS "http://127.0.0.1:$port/api/stats" >/dev/null && echo "API answers on 127.0.0.1:$port" && exit 0; sleep 5; done; \
             echo "/api/stats did not answer on 127.0.0.1:$port" >&2; exit 1'

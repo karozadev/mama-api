@@ -11,7 +11,7 @@ PostgreSQL, Redis, Mercure (temps réel), un worker de files de messages. Tout e
 - Un serveur Linux avec **Docker** et le plugin **Compose v2**. Pour démarrer : 2 vCPU, 2 Go de RAM, 20 Go de disque
   (la pile consomme environ 150 Mo au repos ; la mémoire PHP est réglée dans `docker/php/fpm-prod.conf`).
 - Un **nom de domaine** dont l'enregistrement DNS (A/AAAA) pointe vers le serveur.
-- Un **reverse proxy** sur le serveur (nginx, Traefik, Caddy…) qui gère le HTTPS du domaine et redirige vers la pile (voir §2). La pile elle-même n'écoute qu'en HTTP sur `127.0.0.1:8090`. PostgreSQL, Redis et Mercure ne sont **pas** exposés.
+- Un **reverse proxy** sur le serveur (nginx, Traefik, Caddy…) qui gère le HTTPS du domaine et redirige vers la pile (voir §2). La pile elle-même n'écoute qu'en HTTP sur `127.0.0.1:8023`. PostgreSQL, Redis et Mercure ne sont **pas** exposés.
 
 ## 2. Déploiement automatique (GitHub Actions)
 
@@ -39,11 +39,11 @@ Les images GHCR restent privées : le serveur s'y connecte pendant le déploieme
 
 Rien à faire à la main : si `~/mama/.env.prod` n'existe pas, `scripts/deploy.sh` le crée (`make secrets`, secrets aléatoires générés
 sur le serveur, `DOMAIN` et `CORS_ALLOW_ORIGIN` renseignés). Prérequis : Docker + Compose v2 sur le serveur, l'utilisateur dans le groupe `docker`,
-et le port local `HTTP_PORT` (8090 par défaut, modifiable dans `.env.prod`) libre.
+et le port local `HTTP_PORT` (8023 par défaut ; changez-le avec la variable de dépôt `HTTP_PORT`) libre.
 
 ### Reverse proxy et HTTPS
 
-La pile sert du HTTP sur `127.0.0.1:8090` et fait confiance aux en-têtes `X-Forwarded-*` du proxy (le port n'est pas joignable de l'extérieur).
+La pile sert du HTTP sur `127.0.0.1:8023` et fait confiance aux en-têtes `X-Forwarded-*` du proxy (le port n'est pas joignable de l'extérieur).
 Le proxy du serveur doit donc gérer le certificat de `mama.karoza.dev` et transmettre, **sans mettre en tampon Mercure** :
 
 ```nginx
@@ -54,13 +54,13 @@ server {
     client_max_body_size 8m;
 
     location / {
-        proxy_pass http://127.0.0.1:8090;
+        proxy_pass http://127.0.0.1:8023;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
     }
     location /.well-known/mercure {
-        proxy_pass http://127.0.0.1:8090;
+        proxy_pass http://127.0.0.1:8023;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_set_header Host $host;

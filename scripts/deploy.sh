@@ -19,11 +19,13 @@ if [ ! -f .env.prod ]; then
     echo "Created .env.prod on the server: back it up (it holds the secrets, see docs/DEPLOY.md)."
 fi
 
-# Older .env.prod files (standalone TLS edge) asked for port 80: the stack now sits behind a reverse proxy.
-if [ "$(sed -n 's/^HTTP_PORT=//p' .env.prod | tail -n 1)" = "80" ]; then
-    sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8090/' .env.prod
-fi
-grep -q '^HTTP_PORT=' .env.prod || printf 'HTTP_PORT=8090\n' >> .env.prod
+# Host port of the stack (plain HTTP on the loopback, behind the reverse proxy): HTTP_PORT from the
+# environment wins, an existing value is kept, otherwise 8023. Old standalone-TLS files asked for port 80.
+current=$(sed -n 's/^HTTP_PORT=//p' .env.prod | tail -n 1)
+wanted="${HTTP_PORT:-$current}"
+[ -z "$wanted" ] || [ "$wanted" = "80" ] && wanted=8023
+sed -i '/^HTTP_PORT=/d' .env.prod
+printf 'HTTP_PORT=%s\n' "$wanted" >> .env.prod
 
 PROD="docker compose -f compose.prod.yaml --env-file .env.prod"
 previous=$(sed -n 's/^IMAGE_TAG=//p' .env.prod | tail -n 1)
@@ -58,4 +60,4 @@ fi
 $PROD ps
 docker image prune -f >/dev/null
 port=$(sed -n 's/^HTTP_PORT=//p' .env.prod | tail -n 1)
-echo "Deployed $IMAGE_TAG (previous: ${previous:-none}). Serving HTTP on 127.0.0.1:${port:-8090}; point the reverse proxy for the domain there."
+echo "Deployed $IMAGE_TAG (previous: ${previous:-none}). Serving HTTP on 127.0.0.1:${port:-8023}; point the reverse proxy for the domain there."
