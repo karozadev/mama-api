@@ -6,9 +6,26 @@ set -eu
 cd "$(dirname "$0")/.."
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 
+# First install: create .env.prod (random secrets, generated here and never printed) and the TLS certificate.
 if [ ! -f .env.prod ]; then
-    echo "No .env.prod on this server. First time? Run: make secrets, edit .env.prod, make cert, then deploy again." >&2
-    exit 1
+    : "${DOMAIN:?DOMAIN is required for the first install}"
+    : "${LETSENCRYPT_EMAIL:?Set the LETSENCRYPT_EMAIL repository variable (Let's Encrypt contact) for the first install}"
+    ./scripts/make-env-prod.sh
+    domain_re=$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')
+    sed -i -e '/^DOMAIN=/d' -e '/^LETSENCRYPT_EMAIL=/d' -e '/^CORS_ALLOW_ORIGIN=/d' .env.prod
+    {
+        printf 'DOMAIN=%s\n' "$DOMAIN"
+        printf 'LETSENCRYPT_EMAIL=%s\n' "$LETSENCRYPT_EMAIL"
+        printf 'CORS_ALLOW_ORIGIN=^https://%s$\n' "$domain_re"
+    } >> .env.prod
+    echo "Created .env.prod on the server: back it up (it holds the secrets, see docs/DEPLOY.md)."
+fi
+
+domain=$(sed -n 's/^DOMAIN=//p' .env.prod | tail -n 1)
+le_dir=$(sed -n 's/^LETSENCRYPT_DIR=//p' .env.prod | tail -n 1)
+if [ ! -d "${le_dir:-/etc/letsencrypt}/live/$domain" ]; then
+    echo "No certificate for $domain yet: requesting one (port 80 must be free)."
+    ./scripts/certbot.sh issue
 fi
 
 PROD="docker compose -f compose.prod.yaml --env-file .env.prod"

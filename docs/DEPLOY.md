@@ -37,14 +37,10 @@ Les images GHCR restent privées : le serveur s'y connecte pendant le déploieme
 
 ### Première installation du serveur
 
-```bash
-cd /opt/mama                  # créé par un premier lancement du workflow (il s'arrête sur « No .env.prod »)
-make secrets                 # crée .env.prod avec des secrets aléatoires (mode 600)
-nano .env.prod               # renseignez DOMAIN, LETSENCRYPT_EMAIL, CORS_ALLOW_ORIGIN
-make cert                    # certificat Let's Encrypt (le port 80 doit être libre)
-```
-
-Relancez ensuite le workflow (Actions → Deploy → Run workflow). Vérifiez : `curl https://VOTRE_DOMAINE/api/stats` doit répondre en JSON.
+Rien à faire à la main : si `/opt/mama/.env.prod` n'existe pas, `scripts/deploy.sh` le crée (`make secrets`, secrets aléatoires générés
+sur le serveur, `DOMAIN`, `LETSENCRYPT_EMAIL` et `CORS_ALLOW_ORIGIN` renseignés) et demande le certificat Let's Encrypt (port 80 libre).
+Prérequis : Docker + Compose v2 sur le serveur, l'utilisateur dans le groupe `docker`, et la variable de dépôt `LETSENCRYPT_EMAIL`.
+Vérifiez ensuite : `curl https://VOTRE_DOMAINE/api/stats` doit répondre en JSON.
 
 **Gardez une copie de `.env.prod` dans un gestionnaire de mots de passe.** Perdre `JWT_PASSPHRASE` ou le volume `jwt`
 déconnecte tous les utilisateurs ; perdre `DB_PASSWORD` verrouille la base.
