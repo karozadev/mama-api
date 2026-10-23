@@ -21,7 +21,7 @@ env:
   REGISTRY: ghcr.io
   APP_IMAGE: ghcr.io/karozadev/mama-api
   NGINX_IMAGE: ghcr.io/karozadev/mama-api-nginx
-  DEPLOY_DIR: /opt/mama
+  DEPLOY_DIR: mama # relative to the SSH user home
 
 jobs:
   build:

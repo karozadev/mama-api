@@ -19,7 +19,7 @@ Le dépôt n'est **pas cloné** sur le serveur. À chaque push sur `main` dont l
 `.github/workflows/deploy.yml` :
 
 1. construit les images `ghcr.io/karozadev/mama-api` (PHP-FPM) et `ghcr.io/karozadev/mama-api-nginx`, étiquetées avec le SHA du commit et `latest` ;
-2. envoie sur le serveur (dans `/opt/mama`) uniquement `compose.prod.yaml`, le `Makefile` et `scripts/` ;
+2. envoie sur le serveur (dans `~/mama`) uniquement `compose.prod.yaml`, le `Makefile` et `scripts/` ;
 3. se connecte en SSH, tire les images, applique les migrations, redémarre la pile (`scripts/deploy.sh`) et revient au tag précédent si elle ne devient pas saine ;
 4. teste `https://mama.karoza.dev/api/stats`.
 
@@ -37,7 +37,7 @@ Les images GHCR restent privées : le serveur s'y connecte pendant le déploieme
 
 ### Première installation du serveur
 
-Rien à faire à la main : si `/opt/mama/.env.prod` n'existe pas, `scripts/deploy.sh` le crée (`make secrets`, secrets aléatoires générés
+Rien à faire à la main : si `~/mama/.env.prod` n'existe pas, `scripts/deploy.sh` le crée (`make secrets`, secrets aléatoires générés
 sur le serveur, `DOMAIN`, `LETSENCRYPT_EMAIL` et `CORS_ALLOW_ORIGIN` renseignés) et demande le certificat Let's Encrypt (port 80 libre).
 Prérequis : Docker + Compose v2 sur le serveur, l'utilisateur dans le groupe `docker`, et la variable de dépôt `LETSENCRYPT_EMAIL`.
 Vérifiez ensuite : `curl https://VOTRE_DOMAINE/api/stats` doit répondre en JSON.
